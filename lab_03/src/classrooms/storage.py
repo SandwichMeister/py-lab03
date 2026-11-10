@@ -29,19 +29,30 @@ def load_catalog(catalog: Catalog, path: str) -> None:
     try:
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
+
+        if not isinstance(data, dict):
+            raise CorruptedFileError("корень JSON должен быть словарем")
+
+        if set(data) != {"format_version", "items"}:
+            raise CorruptedFileError("документ должен содержать только format_version и items")
+
         version = data["format_version"]
-        items = data["items"]
-    except (ValueError, KeyError, TypeError) as error:
-        raise CorruptedFileError(f"файл повреждён: {error}") from error
 
-    if version != FORMAT_VERSION:
-        raise UnsupportedVersionError(f"неизвестная версия формата: {version}")
+        if version != FORMAT_VERSION:
+            raise UnsupportedVersionError(f"неизвестная версия формата: {version}")
 
-    new_catalog = Catalog()
-    try:
-        for item_data in items:
+        if not isinstance(data["items"], list):
+            raise CorruptedFileError("items должен быть списком")
+
+        required_fields = {"id", "name", "category", "year", "building", "capacity"}
+        new_catalog = Catalog()
+
+        for item_data in data["items"]:
+            if set(item_data) != required_fields:
+                raise CorruptedFileError("неверный набор полей аудитории")
+
             new_catalog.add(Classroom(**item_data))
-    except (TypeError, InvalidItemError, DuplicateIdError) as error:
-        raise CorruptedFileError(f"файл повреждён: {error}") from error
 
+    except (ValueError, TypeError, InvalidItemError, DuplicateIdError) as error:
+        raise CorruptedFileError(f"файл повреждён: {error}") from error
     catalog._items = new_catalog._items  # ошибок не было — подменяем содержимое
